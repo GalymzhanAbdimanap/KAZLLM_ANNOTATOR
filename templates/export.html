@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav.export') }}{% endblock %}
+{% block content %}
+
+<h1>{{ t('export.title') }}</h1>
+<p>{{ t('export.intro') }}<b>{{ user.full_name }}</b>.</p>
+<p class="muted">{{ t('export.naming_hint') }}</p>
+
+{% if units %}
+<form method="post">
+<table class="units">
+  <thead>
+    <tr>
+      <th><input type="checkbox" onclick="toggleAll(this)"></th>
+      <th>{{ t('index.col_id') }}</th>
+      <th>{{ t('index.col_code') }}</th>
+      <th>{{ t('index.col_archetype') }}</th>
+      <th>{{ t('index.col_domain') }}</th>
+      <th>{{ t('index.col_created') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in units %}
+    <tr>
+      <td><input type="checkbox" name="unit_ids" value="{{ u.id }}"></td>
+      <td>{{ u.id }}</td>
+      <td><code>{{ u.unit_code }}</code></td>
+      <td>{{ t('archetype.' ~ u.archetype) }}</td>
+      <td>{{ u.domain or '—' }}</td>
+      <td class="muted">{{ u.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<div class="toolbar">
+  <button class="btn" type="submit">{{ t('export.btn_download') }}</button>
+  <a href="{{ url_for('index') }}" class="btn secondary">{{ t('export.btn_back') }}</a>
+</div>
+</form>
+{% else %}
+<div class="card empty">{{ t('export.empty') }}</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleAll(cb) {
+  document.querySelectorAll('input[name="unit_ids"]').forEach(x => x.checked = cb.checked);
+}
+</script>
+{% endblock %}

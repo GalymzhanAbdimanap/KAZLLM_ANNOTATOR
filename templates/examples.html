@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ t('examples.title') }}{% endblock %}
+{% block content %}
+
+<h1>{{ t('examples.title') }}</h1>
+<p class="muted">{{ t('examples.intro') }}</p>
+
+{# Якоря по архетипам в верхней части страницы #}
+<div class="card" style="background:#eef4ff;border-color:#bdd1f5;">
+  <h3 style="margin-top:0;">{{ t('examples.toc_title') }}</h3>
+  <ul style="margin:0;padding-left:20px;">
+    {% for arch, r in rules %}
+    <li><a href="#arch-{{ arch }}"><b>{{ arch }}</b></a> — {{ r.title }} <span class="muted">({{ r.ref }})</span></li>
+    {% endfor %}
+  </ul>
+</div>
+
+{# Группируем правила и примеры по архетипу #}
+{% for arch, r in rules %}
+<div id="arch-{{ arch }}" style="margin-top:30px;">
+  <h2>{{ r.title }}</h2>
+  <p class="muted" style="margin-bottom:8px;">{{ t('examples.archetype') }}: <code>{{ arch }}</code> · {{ r.ref }}</p>
+
+  {# Правила архетипа: что должно и чего не должно быть #}
+  <div class="card" style="background:#fafbfc;">
+    <div class="row">
+      <div>
+        <h3 style="margin-top:0;color:var(--ok-text);">✓ {{ t('examples.must_be') }}</h3>
+        <ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.5;">
+          {% for item in r.must %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div>
+        <h3 style="margin-top:0;color:var(--error-text);">✗ {{ t('examples.must_not') }}</h3>
+        <ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.5;">
+          {% for item in r.avoid %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  {# Примеры этого архетипа #}
+  <h3 style="margin-top:20px;">{{ t('examples.examples_section') }}</h3>
+  {% set examples_for_arch = items | selectattr('archetype', 'equalto', arch) | list %}
+  {% if examples_for_arch %}
+    {% for it in examples_for_arch %}
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:300px;">
+          <h3 style="margin-top:0;">{{ it.title }}</h3>
+          <p>{{ it.explanation }}</p>
+          {% if it.data.tools_in_scope %}
+          <p class="muted" style="font-size:13px;"><b>{{ t('examples.tools_used') }}:</b> <code>{{ it.data.tools_in_scope }}</code></p>
+          {% endif %}
+        </div>
+        <a href="{{ url_for('unit_new_from_example', example_key=it.key) }}" class="btn">{{ t('examples.btn_open') }}</a>
+      </div>
+
+      <details style="margin-top:12px;">
+        <summary style="cursor:pointer;color:var(--accent);font-weight:500;">{{ t('examples.show_full') }}</summary>
+        <div class="example" style="margin-top:12px;">============================
+UNIT {{ it.data.unit_code }}
+============================
+
+[ARCHETYPE]        {{ it.data.archetype }}
+{% if it.data.domain %}[DOMAIN]           {{ it.data.domain }}
+{% endif %}{% if it.data.cultural_anchor %}[CULTURAL_ANCHOR]  {{ it.data.cultural_anchor }}
+{% endif %}{% if it.data.business_use_case %}[BUSINESS_USE_CASE] {{ it.data.business_use_case }}
+{% endif %}{% if it.data.complexity %}[COMPLEXITY]       {{ it.data.complexity }}
+{% endif %}{% if it.data.tools_in_scope %}[TOOLS_IN_SCOPE]   {{ it.data.tools_in_scope }}
+{% endif %}
+{% if it.data.scenario_kk %}--- СЦЕНАРИЙ ---
+{{ it.data.scenario_kk }}
+
+{% endif %}{% for tu in it.data.turns %}--- TURN {{ loop.index }} [{{ tu.role }}] ---
+{% if tu.role == 'ASSISTANT' and tu.thinking_kk %}Thinking (Kazakh):
+{{ tu.thinking_kk }}
+{% endif %}{% if tu.content_kk %}{% if tu.role == 'TOOL_RESULT' %}Content:
+{% else %}Content (Kazakh):
+{% endif %}{{ tu.content_kk }}
+{% endif %}{% if tu.role == 'ASSISTANT' and tu.tool_name %}Tool call:
+  name: {{ tu.tool_name }}
+{% if tu.tool_args %}  args: {{ tu.tool_args }}
+{% endif %}{% if tu.tool_mock_result %}  expected mock_result: {{ tu.tool_mock_result }}
+{% endif %}{% endif %}
+{% endfor %}{% if it.data.preference %}=== PREFERENCE ===
+Good turn idx: {{ it.data.preference.good_turn_idx }}
+Bad alternative (Kazakh): {{ it.data.preference.bad_alternative_kk }}
+Rejection reason: {{ it.data.preference.bad_reason }}
+
+{% endif %}=== METADATA ===
+Source: {{ it.data.source }}
+License: {{ it.data.license }}
+Annotator: {{ user.full_name }}
+Started at: {{ it.data.started_at }}
+Completed at: {{ it.data.completed_at }}
+</div>
+      </details>
+    </div>
+    {% endfor %}
+  {% else %}
+  <p class="muted">{{ t('examples.no_examples_yet') }}</p>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% endblock %}

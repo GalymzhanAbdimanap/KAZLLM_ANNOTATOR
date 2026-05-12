@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav.my_units') }}{% endblock %}
+{% block content %}
+
+<div class="card" style="background:#eef4ff;border-color:#bdd1f5;">
+  <h2 style="margin-top:0;">{{ t('index.intro_title') }}</h2>
+  <p>{{ t('index.intro_p1') }}</p>
+  <p style="margin-bottom:0;">{{ t('index.intro_p2') }} <a href="{{ url_for('help_page') }}">{{ t('nav.help') }}</a>.</p>
+</div>
+
+<div class="toolbar">
+  <a href="{{ url_for('unit_new') }}" class="btn">{{ t('index.btn_create') }}</a>
+  <a href="{{ url_for('examples_page') }}" class="btn secondary">{{ t('nav.examples') }}</a>
+  <a href="{{ url_for('export') }}" class="btn secondary">{{ t('index.btn_export') }}</a>
+</div>
+
+{% if units %}
+<table class="units">
+  <thead>
+    <tr>
+      <th style="width:80px;">{{ t('index.col_id') }}</th>
+      <th>{{ t('index.col_code') }}</th>
+      <th>{{ t('index.col_archetype') }}</th>
+      <th>{{ t('index.col_domain') }}</th>
+      <th>{{ t('index.col_created') }}</th>
+      <th style="width:200px;"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in units %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td><code>{{ u.unit_code }}</code></td>
+      <td>{{ t('archetype.' ~ u.archetype) }}</td>
+      <td>{{ u.domain or '—' }}</td>
+      <td class="muted">{{ u.created_at }}</td>
+      <td>
+        <a href="{{ url_for('unit_edit', unit_id=u.id) }}" class="btn small secondary">{{ t('index.btn_edit') }}</a>
+        <form method="post" action="{{ url_for('unit_delete', unit_id=u.id) }}" style="display:inline;" onsubmit="return confirm('{{ t('index.confirm_delete') }}');">
+          <button class="btn small danger" type="submit">{{ t('index.btn_delete') }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card empty">{{ t('index.empty') }}</div>
+{% endif %}
+
+{% endblock %}

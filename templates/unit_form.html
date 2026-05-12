@@ -1,0 +1,712 @@
+{% extends "base.html" %}
+{% block title %}{{ t('form.title_edit') if unit and unit.id else t('form.title_new') }}{% endblock %}
+{% block content %}
+
+<h1>{{ t('form.title_edit') if unit and unit.id else t('form.title_new') }}</h1>
+<p class="muted">
+  <a href="{{ url_for('help_page') }}" target="_blank">{{ t('form.help_link') }}</a>
+  {% if not (unit and unit.id) %} · <a href="{{ url_for('examples_page') }}">{{ t('nav.examples') }}</a>{% endif %}
+</p>
+
+{% if loaded_from_example %}
+<div class="flash flash-warning" style="margin-bottom:18px;">
+  📋 {{ t('examples.loaded_banner', loaded_from_example) }}
+</div>
+{% endif %}
+
+<form method="post" id="unitForm"
+      action="{% if unit and unit.id %}{{ url_for('unit_edit', unit_id=unit.id) }}{% else %}{{ url_for('unit_new') }}{% endif %}">
+
+<div class="card">
+  <h2>{{ t('form.h_header') }}</h2>
+
+  <label>{{ t('form.unit_code') }} <span style="color:#b73838">{{ t('form.required_mark') }}</span></label>
+  <input type="text" name="unit_code" required
+         pattern="^ly-ds-2026h2-[a-z0-9_]+-\d{3,6}$"
+         value="{{ (unit and unit.unit_code) or '' }}"
+         placeholder="ly-ds-2026h2-business-001">
+  <div class="hint">{{ t('form.unit_code_hint') }}</div>
+
+  <div class="row-3">
+    <div>
+      <label>{{ t('form.archetype') }} <span style="color:#b73838">{{ t('form.required_mark') }}</span></label>
+      <select name="archetype" id="archetypeSelect" required>
+        <option value="">{{ t('form.archetype_choose') }}</option>
+        {% for v, label in archetypes %}
+          <option value="{{ v }}" {% if unit and unit.archetype == v %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>{{ t('form.domain') }}</label>
+      <select name="domain" id="domainSelect">
+        <option value="">{{ t('form.domain_none') }}</option>
+        {% for d in domains %}
+          <option value="{{ d }}" {% if unit and unit.domain == d %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>{{ t('form.complexity') }}</label>
+      <select name="complexity">
+        <option value="">—</option>
+        {% for c in complexities %}
+          <option value="{{ c }}" {% if unit and unit.complexity == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>{{ t('form.cultural_anchor') }} <span class="muted" id="anchorRequiredMark" style="display:none;color:#b73838">{{ t('form.anchor_required') }}</span></label>
+      <select name="cultural_anchor" id="anchorSelect">
+        <option value="">—</option>
+        {% for a in anchors %}
+          <option value="{{ a }}" {% if unit and unit.cultural_anchor == a %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>{{ t('form.tools_in_scope') }}</label>
+      <input type="text" name="tools_in_scope" id="toolsInScope"
+             value="{{ (unit and unit.tools_in_scope) or '' }}"
+             placeholder="kaspi.transfer, egov.service_request">
+      <div class="hint">{{ t('form.tools_in_scope_hint') }}</div>
+    </div>
+  </div>
+
+  <label id="businessUseCaseLabel">{{ t('form.business_use_case') }} <span class="muted" id="bucRequiredMark" style="display:none;color:#b73838">{{ t('form.buc_required') }}</span></label>
+  <textarea name="business_use_case" rows="2" placeholder="Пайдаланушы ҚГД-нен салық мәртебесін тексеріп, берешекті өтегісі келеді">{{ (unit and unit.business_use_case) or '' }}</textarea>
+
+  <label>{{ t('form.scenario') }}</label>
+  <textarea name="scenario_kk" rows="3" placeholder="{{ t('form.scenario_ph') }}">{{ (unit and unit.scenario_kk) or '' }}</textarea>
+</div>
+
+<div class="card">
+  <h2>{{ t('form.h_turns') }}</h2>
+  <p class="muted">{{ t('form.turns_hint') }}</p>
+
+  <div id="turnsContainer">
+    {% for tu in turns %}
+    <div class="turn" data-role="{{ tu.role }}">
+      <div class="turn-header">
+        <strong>{{ t('form.turn_label') }} <span class="turn-num"></span></strong>
+        <div>
+          <select name="turn_{{ loop.index0 }}_role" class="role-select" onchange="onRoleChange(this)">
+            <option value="USER" {% if tu.role=='USER' %}selected{% endif %}>{{ t('form.role_user') }}</option>
+            <option value="ASSISTANT" {% if tu.role=='ASSISTANT' %}selected{% endif %}>{{ t('form.role_assistant') }}</option>
+            <option value="TOOL_RESULT" {% if tu.role=='TOOL_RESULT' %}selected{% endif %}>{{ t('form.role_tool_result') }}</option>
+          </select>
+          <button type="button" class="btn small danger" onclick="removeTurn(this)">{{ t('form.btn_remove_turn') }}</button>
+        </div>
+      </div>
+
+      <div class="turn-thinking">
+        <label>{{ t('form.thinking') }}</label>
+        <textarea name="turn_{{ loop.index0 }}_thinking_kk" rows="2">{{ tu.thinking_kk or '' }}</textarea>
+      </div>
+
+      <div class="turn-content-text">
+        <label>{{ t('form.content') }}</label>
+        <textarea name="turn_{{ loop.index0 }}_content_kk_text" rows="3">{% if tu.role != 'TOOL_RESULT' %}{{ tu.content_kk or '' }}{% endif %}</textarea>
+      </div>
+
+      <div class="turn-content-result">
+        <label>{{ t('form.tool_result_label') }}</label>
+        <div class="tool-result-fields"></div>
+        <details>
+          <summary class="muted" style="cursor:pointer;font-size:13px;margin-top:6px;">{{ t('form.tool_result_raw') }}</summary>
+          <textarea name="turn_{{ loop.index0 }}_content_kk_json" rows="3" class="code">{% if tu.role == 'TOOL_RESULT' %}{{ tu.content_kk or '' }}{% endif %}</textarea>
+        </details>
+        <div class="hint">{{ t('form.tool_result_hint') }}</div>
+      </div>
+
+      <div class="turn-tools">
+        <h3 style="margin-top:14px;">{{ t('form.tool_call') }}</h3>
+
+        <label>{{ t('form.tool_name') }}</label>
+        <select name="turn_{{ loop.index0 }}_tool_name" class="tool-select" onchange="onToolChange(this)">
+          <option value="">{{ t('form.tool_name_none') }}</option>
+          {% for tool in tool_library %}
+          <option value="{{ tool }}" {% if tu.tool_name==tool %}selected{% endif %}>{{ tool }}</option>
+          {% endfor %}
+        </select>
+        <div class="tool-info muted" style="font-size:12px;margin-top:4px;"></div>
+
+        {# Динамические поля параметров инструмента #}
+        <div class="tool-args-fields"></div>
+
+        {# Скрытое поле — туда JS складывает собранный JSON args перед сабмитом.
+           Используем tojson для безопасного экранирования двойных кавычек внутри JSON. #}
+        <input type="hidden" name="turn_{{ loop.index0 }}_tool_args" class="tool-args-json"
+               value="{{ tu.tool_args|default('', true)|e }}">
+
+        {# Динамические поля mock_result #}
+        <div class="tool-mock-fields"></div>
+
+        {# Скрытое поле под mock JSON #}
+        <input type="hidden" name="turn_{{ loop.index0 }}_tool_mock_result" class="tool-mock-json"
+               value="{{ tu.tool_mock_result|default('', true)|e }}">
+
+        {# Кнопка показать сырой JSON (для тех, кому удобнее) #}
+        <details style="margin-top:8px;">
+          <summary class="muted" style="cursor:pointer;font-size:13px;">{{ t('form.tool_show_raw_json') }}</summary>
+          <label style="font-size:13px;">{{ t('form.tool_args') }}</label>
+          <textarea class="code tool-args-raw" rows="2" oninput="onRawArgsEdit(this)">{{ tu.tool_args or '' }}</textarea>
+          <label style="font-size:13px;">{{ t('form.tool_mock') }}</label>
+          <textarea class="code tool-mock-raw" rows="2" oninput="onRawMockEdit(this)">{{ tu.tool_mock_result or '' }}</textarea>
+        </details>
+
+        <button type="button" class="btn small secondary" onclick="copyMockToNextResult(this)" style="margin-top:8px;">{{ t('form.copy_mock') }}</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <button type="button" class="btn secondary" onclick="addTurn()">{{ t('form.btn_add_turn') }}</button>
+</div>
+
+<div class="card" id="prefBlock" style="display:none;">
+  <h2>{{ t('form.h_pref') }}</h2>
+  <p class="muted">{{ t('form.pref_intro') }}</p>
+
+  <div class="row-3">
+    <div>
+      <label>{{ t('form.pref_good_idx') }}</label>
+      <input type="number" name="pref_good_turn_idx" min="1" max="20"
+             value="{{ preference.good_turn_idx if preference else '' }}">
+    </div>
+    <div style="grid-column:span 2;">
+      <label>{{ t('form.pref_reason') }}</label>
+      <select name="pref_bad_reason">
+        <option value="">—</option>
+        {% for v, label in rejection_reasons %}
+          <option value="{{ v }}" {% if preference and preference.bad_reason == v %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <label>{{ t('form.pref_bad') }}</label>
+  <textarea name="pref_bad_alternative_kk" rows="3">{{ preference.bad_alternative_kk if preference else '' }}</textarea>
+  <div class="hint">{{ t('form.pref_bad_hint') }}</div>
+</div>
+
+<div class="card">
+  <h2>{{ t('form.h_meta') }}</h2>
+
+  <div class="row">
+    <div>
+      <label>{{ t('form.source') }} <span style="color:#b73838">{{ t('form.required_mark') }}</span></label>
+      <input type="text" name="source" required
+             value="{{ (unit and unit.source) or '' }}"
+             placeholder="{{ t('form.source_ph') }}">
+      <div class="hint">{{ t('form.source_hint') }}</div>
+    </div>
+    <div>
+      <label>{{ t('form.license') }} <span style="color:#b73838">{{ t('form.required_mark') }}</span></label>
+      <select name="license" required>
+        <option value="">—</option>
+        {% for l in licenses %}
+          <option value="{{ l }}" {% if unit and unit.license == l %}selected{% endif %}>{{ l }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <label>{{ t('form.reviewer') }}</label>
+  <input type="text" name="reviewer" value="{{ (unit and unit.reviewer) or '' }}">
+
+  <div class="row">
+    <div>
+      <label>{{ t('form.started_at') }} <span style="color:#b73838">{{ t('form.required_mark') }}</span></label>
+      <input type="text" name="started_at" required
+             value="{{ (unit and unit.started_at) or suggested_started }}"
+             pattern="^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:?\d{2}|Z)?$"
+             placeholder="2026-05-03T09:12:00+06:00">
+    </div>
+    <div>
+      <label>{{ t('form.completed_at') }} <span style="color:#b73838">{{ t('form.required_mark') }}</span></label>
+      <input type="text" name="completed_at" required id="completedAtInput"
+             value="{{ (unit and unit.completed_at) or '' }}"
+             pattern="^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:?\d{2}|Z)?$"
+             placeholder="2026-05-03T09:19:17+06:00">
+      <button type="button" class="btn small secondary" onclick="setNow()">{{ t('form.btn_now') }}</button>
+      <div class="hint">{{ t('form.duration_hint') }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <button type="submit" class="btn" onclick="syncAllJsonBeforeSubmit()">{{ t('form.btn_save') }}</button>
+  <a href="{{ url_for('index') }}" class="btn secondary">{{ t('form.btn_cancel') }}</a>
+</div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const I18N = {
+  turn_label:           {{ t('form.turn_label')|tojson }},
+  role_user:            {{ t('form.role_user')|tojson }},
+  role_assistant:       {{ t('form.role_assistant')|tojson }},
+  role_tool_result:     {{ t('form.role_tool_result')|tojson }},
+  btn_remove_turn:      {{ t('form.btn_remove_turn')|tojson }},
+  thinking:             {{ t('form.thinking')|tojson }},
+  content:              {{ t('form.content')|tojson }},
+  tool_call:            {{ t('form.tool_call')|tojson }},
+  tool_name:            {{ t('form.tool_name')|tojson }},
+  tool_name_none:       {{ t('form.tool_name_none')|tojson }},
+  tool_args:            {{ t('form.tool_args')|tojson }},
+  tool_mock:            {{ t('form.tool_mock')|tojson }},
+  tool_result_label:    {{ t('form.tool_result_label')|tojson }},
+  tool_result_hint:     {{ t('form.tool_result_hint')|tojson }},
+  tool_result_raw:      {{ t('form.tool_result_raw')|tojson }},
+  tool_show_raw_json:   {{ t('form.tool_show_raw_json')|tojson }},
+  copy_mock:            {{ t('form.copy_mock')|tojson }},
+  confirm_remove:       {{ t('form.confirm_remove_turn')|tojson }},
+  last_turn_alert:      {{ t('form.last_turn_alert')|tojson }},
+  no_tool_first:        {{ t('form.no_tool_first')|tojson }},
+  args_section:         {{ t('form.args_section')|tojson }},
+  mock_section:         {{ t('form.mock_section')|tojson }},
+  field_required:       {{ t('form.field_required')|tojson }},
+  field_optional:       {{ t('form.field_optional')|tojson }},
+  result_no_tool_above: {{ t('form.result_no_tool_above')|tojson }},
+};
+
+let turnIndex = {{ turns|length }};
+
+// Кэш схем форм инструментов: { tool_name: schema_for_form_response }
+const TOOL_FORM_CACHE = {};
+
+async function loadToolForm(toolName) {
+  if (TOOL_FORM_CACHE[toolName]) return TOOL_FORM_CACHE[toolName];
+  try {
+    const r = await fetch(`/api/tool-form/${encodeURIComponent(toolName)}`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    TOOL_FORM_CACHE[toolName] = data;
+    return data;
+  } catch (e) { return null; }
+}
+
+// ── Рендер одного поля input/output по описанию из API
+function renderField(field, value, fieldNamePrefix) {
+  const id = `${fieldNamePrefix}_${field.key}`;
+  const requiredMark = field.required ? `<span style="color:#b73838">*</span>` : '';
+  const hint = field.hint ? `<div class="hint">${escapeHtml(field.hint)}</div>` : '';
+  let inputHtml;
+
+  if (field.type === "enum") {
+    const opts = (field.enum || []).map(v =>
+      `<option value="${escapeHtml(v)}" ${value === v ? 'selected' : ''}>${escapeHtml(v)}</option>`
+    ).join('');
+    inputHtml = `<select data-key="${escapeHtml(field.key)}" data-type="enum" id="${id}"><option value="">—</option>${opts}</select>`;
+  } else if (field.type === "boolean") {
+    inputHtml = `<select data-key="${escapeHtml(field.key)}" data-type="boolean" id="${id}">
+      <option value="">—</option>
+      <option value="true" ${value === true ? 'selected' : ''}>true</option>
+      <option value="false" ${value === false ? 'selected' : ''}>false</option>
+    </select>`;
+  } else if (field.type === "amount_kzt" || field.type === "integer") {
+    const v = (typeof value === 'number') ? value : '';
+    inputHtml = `<input type="number" step="1" min="${field.type === 'amount_kzt' ? 0 : ''}"
+      data-key="${escapeHtml(field.key)}" data-type="${field.type}" id="${id}" value="${v}"
+      placeholder="${escapeHtml(field.placeholder || '')}">`;
+  } else if (field.type === "date") {
+    inputHtml = `<input type="date" data-key="${escapeHtml(field.key)}" data-type="date" id="${id}"
+      value="${escapeHtml(value || '')}">`;
+  } else if (field.type === "object" || field.type === "array") {
+    // Для object/array показываем textarea — слишком вариативны
+    const v = (value !== null && value !== undefined) ? JSON.stringify(value, null, 2) : '';
+    inputHtml = `<textarea class="code" rows="2" data-key="${escapeHtml(field.key)}" data-type="${field.type}" id="${id}"
+      placeholder='${field.type === "array" ? "[]" : "{}"}'>${escapeHtml(v)}</textarea>`;
+  } else {
+    // string, iin, bin, phone_kz, datetime, url, email
+    let pattern = '';
+    if (field.type === 'iin' || field.type === 'bin') pattern = ' pattern="\\d{12}"';
+    else if (field.type === 'phone_kz') pattern = ' pattern="\\+7\\d{10}"';
+    inputHtml = `<input type="text" data-key="${escapeHtml(field.key)}" data-type="${escapeHtml(field.type)}" id="${id}"
+      value="${escapeHtml(value || '')}" placeholder="${escapeHtml(field.placeholder || '')}"${pattern}>`;
+  }
+
+  return `<label for="${id}">${escapeHtml(field.label)} ${requiredMark}
+    <span class="muted" style="font-size:11px;margin-left:6px;">[${field.type}${field.required ? ', '+I18N.field_required : ', '+I18N.field_optional}]</span>
+  </label>${inputHtml}${hint}`;
+}
+
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// ── Собирает значения из всех динамических полей в JSON-объект
+function collectFieldsToJson(container) {
+  const obj = {};
+  container.querySelectorAll('[data-key]').forEach(el => {
+    const key = el.dataset.key;
+    const type = el.dataset.type;
+    let val = el.value;
+    if (val === '' || val === null) return; // пропускаем пустые
+    if (type === 'amount_kzt' || type === 'integer') {
+      const n = parseInt(val, 10);
+      if (!isNaN(n)) obj[key] = n;
+    } else if (type === 'boolean') {
+      obj[key] = (val === 'true');
+    } else if (type === 'object' || type === 'array') {
+      try { obj[key] = JSON.parse(val); }
+      catch(e) { obj[key] = val; /* оставляем как есть, валидатор поймает */ }
+    } else {
+      obj[key] = val;
+    }
+  });
+  return obj;
+}
+
+// ── Заполнить динамические поля из JSON-объекта (обратная операция)
+function fillFieldsFromJson(container, jsonObj) {
+  if (!jsonObj || typeof jsonObj !== 'object') return;
+  container.querySelectorAll('[data-key]').forEach(el => {
+    const key = el.dataset.key;
+    if (!(key in jsonObj)) return;
+    const type = el.dataset.type;
+    const v = jsonObj[key];
+    if (type === 'object' || type === 'array') {
+      el.value = JSON.stringify(v, null, 2);
+    } else if (type === 'boolean') {
+      el.value = v === true ? 'true' : (v === false ? 'false' : '');
+    } else {
+      el.value = (v === null || v === undefined) ? '' : String(v);
+    }
+  });
+}
+
+// ── Когда выбран инструмент — рендерим поля
+async function onToolChange(sel) {
+  const turn = sel.closest(".turn");
+  const tn = sel.value;
+  const info = turn.querySelector(".tool-info");
+  const argsContainer = turn.querySelector(".tool-args-fields");
+  const mockContainer = turn.querySelector(".tool-mock-fields");
+
+  if (!tn) {
+    info.textContent = "";
+    argsContainer.innerHTML = "";
+    mockContainer.innerHTML = "";
+    return;
+  }
+
+  const data = await loadToolForm(tn);
+  if (!data) {
+    info.textContent = "(error loading schema)";
+    return;
+  }
+
+  info.innerHTML = `<b>${escapeHtml(data.label)}</b> · domain: ${data.domain.join(", ")}<br>${escapeHtml(data.description)}`;
+
+  // Подгружаем существующие значения, если они уже есть в hidden JSON-полях
+  const argsJsonField = turn.querySelector(".tool-args-json");
+  const mockJsonField = turn.querySelector(".tool-mock-json");
+  let existingArgs = {};
+  let existingMock = {};
+  try { existingArgs = JSON.parse(argsJsonField.value || '{}'); } catch(e) {}
+  try { existingMock = JSON.parse(mockJsonField.value || '{}'); } catch(e) {}
+
+  // Рендерим поля input
+  const argsLabel = `<h4 style="margin:12px 0 4px;font-size:14px;">${I18N.args_section}</h4>`;
+  const argsFieldsHtml = data.input_fields.map(f =>
+    renderField(f, existingArgs[f.key], `args_${turnIdOf(turn)}`)
+  ).join('');
+  argsContainer.innerHTML = argsLabel + argsFieldsHtml;
+
+  // Рендерим поля output (mock)
+  const mockLabel = `<h4 style="margin:12px 0 4px;font-size:14px;">${I18N.mock_section}</h4>`;
+  const mockFieldsHtml = data.output_fields.map(f =>
+    renderField(f, existingMock[f.key], `mock_${turnIdOf(turn)}`)
+  ).join('');
+  mockContainer.innerHTML = mockLabel + mockFieldsHtml;
+
+  // Привязываем onChange — синхронизируем в hidden JSON-поля
+  argsContainer.querySelectorAll('[data-key]').forEach(el => {
+    el.addEventListener('input', () => syncArgsToJson(turn));
+    el.addEventListener('change', () => syncArgsToJson(turn));
+  });
+  mockContainer.querySelectorAll('[data-key]').forEach(el => {
+    el.addEventListener('input', () => syncMockToJson(turn));
+    el.addEventListener('change', () => syncMockToJson(turn));
+  });
+
+  syncArgsToJson(turn);
+  syncMockToJson(turn);
+
+  // Также рендерим поля для следующего TOOL_RESULT, если он есть
+  rerenderToolResultBelow(turn);
+}
+
+function turnIdOf(turn) {
+  const sel = turn.querySelector('.role-select');
+  const m = sel ? sel.name.match(/turn_(\d+)_/) : null;
+  return m ? m[1] : '0';
+}
+
+function syncArgsToJson(turn) {
+  const obj = collectFieldsToJson(turn.querySelector('.tool-args-fields'));
+  const hidden = turn.querySelector('.tool-args-json');
+  hidden.value = JSON.stringify(obj);
+  // Синхронизируем raw textarea для пользователей, кто хочет видеть JSON
+  const raw = turn.querySelector('.tool-args-raw');
+  if (raw && document.activeElement !== raw) {
+    raw.value = JSON.stringify(obj, null, 2);
+  }
+}
+
+function syncMockToJson(turn) {
+  const obj = collectFieldsToJson(turn.querySelector('.tool-mock-fields'));
+  const hidden = turn.querySelector('.tool-mock-json');
+  hidden.value = JSON.stringify(obj);
+  const raw = turn.querySelector('.tool-mock-raw');
+  if (raw && document.activeElement !== raw) {
+    raw.value = JSON.stringify(obj, null, 2);
+  }
+  // И обновляем поля TOOL_RESULT-тура ниже, если он показывает mock-поля
+  rerenderToolResultBelow(turn);
+}
+
+// При ручном редактировании сырого JSON — парсим и переносим в поля
+function onRawArgsEdit(textarea) {
+  const turn = textarea.closest('.turn');
+  try {
+    const obj = JSON.parse(textarea.value);
+    fillFieldsFromJson(turn.querySelector('.tool-args-fields'), obj);
+    turn.querySelector('.tool-args-json').value = textarea.value;
+  } catch(e) { /* пользователь ещё печатает */ }
+}
+function onRawMockEdit(textarea) {
+  const turn = textarea.closest('.turn');
+  try {
+    const obj = JSON.parse(textarea.value);
+    fillFieldsFromJson(turn.querySelector('.tool-mock-fields'), obj);
+    turn.querySelector('.tool-mock-json').value = textarea.value;
+    rerenderToolResultBelow(turn);
+  } catch(e) {}
+}
+
+// ── Рендерим поля для тура TOOL_RESULT (это копия mock_result предыдущего ASSISTANT)
+async function rerenderToolResultBelow(assistantTurn) {
+  const allTurns = Array.from(document.querySelectorAll('#turnsContainer .turn'));
+  const idx = allTurns.indexOf(assistantTurn);
+  const next = allTurns[idx + 1];
+  if (!next || next.dataset.role !== 'TOOL_RESULT') return;
+  const sel = assistantTurn.querySelector('.tool-select');
+  const tn = sel ? sel.value : '';
+  if (!tn) return;
+  const data = await loadToolForm(tn);
+  if (!data) return;
+  const container = next.querySelector('.tool-result-fields');
+  const hidden = next.querySelector('[name$="_content_kk_json"]');
+  let existing = {};
+  try { existing = JSON.parse(hidden.value || '{}'); } catch(e) {}
+  // Если TOOL_RESULT пуст — заполняем из mock предыдущего тура (для удобства)
+  if (Object.keys(existing).length === 0) {
+    try { existing = JSON.parse(assistantTurn.querySelector('.tool-mock-json').value || '{}'); } catch(e) {}
+  }
+  const fieldsHtml = data.output_fields.map(f =>
+    renderField(f, existing[f.key], `result_${turnIdOf(next)}`)
+  ).join('');
+  container.innerHTML = fieldsHtml;
+  container.querySelectorAll('[data-key]').forEach(el => {
+    el.addEventListener('input', () => syncToolResultToJson(next));
+    el.addEventListener('change', () => syncToolResultToJson(next));
+  });
+  syncToolResultToJson(next);
+}
+
+function syncToolResultToJson(toolResultTurn) {
+  const obj = collectFieldsToJson(toolResultTurn.querySelector('.tool-result-fields'));
+  toolResultTurn.querySelector('[name$="_content_kk_json"]').value = JSON.stringify(obj);
+}
+
+function rerenderResultFromTurnAbove(toolResultTurn) {
+  const allTurns = Array.from(document.querySelectorAll('#turnsContainer .turn'));
+  const idx = allTurns.indexOf(toolResultTurn);
+  const prev = allTurns[idx - 1];
+  if (prev && prev.dataset.role === 'ASSISTANT') {
+    rerenderToolResultBelow(prev);
+  } else {
+    // Нет ASSISTANT-тура с инструментом выше — показываем сообщение
+    const container = toolResultTurn.querySelector('.tool-result-fields');
+    container.innerHTML = `<div class="muted" style="font-size:13px;padding:8px 0;">${I18N.result_no_tool_above}</div>`;
+  }
+}
+
+function renumberTurns() {
+  document.querySelectorAll("#turnsContainer .turn").forEach((el, i) => {
+    el.querySelector(".turn-num").textContent = (i + 1);
+    el.querySelectorAll("[name]").forEach(input => {
+      input.name = input.name.replace(/^turn_\d+_/, `turn_${i}_`);
+    });
+  });
+}
+
+function onRoleChange(sel) {
+  const turn = sel.closest(".turn");
+  turn.dataset.role = sel.value;
+  // Пересобрать TOOL_RESULT-поля если стало TOOL_RESULT
+  if (sel.value === 'TOOL_RESULT') rerenderResultFromTurnAbove(turn);
+}
+
+function copyMockToNextResult(btn) {
+  const turn = btn.closest(".turn");
+  const mockHidden = turn.querySelector(".tool-mock-json").value.trim();
+  if (!mockHidden || mockHidden === '{}') {
+    alert(I18N.no_tool_first);
+    return;
+  }
+  const allTurns = Array.from(document.querySelectorAll("#turnsContainer .turn"));
+  const idx = allTurns.indexOf(turn);
+  let next = allTurns[idx + 1];
+  if (!next || next.dataset.role !== "TOOL_RESULT") {
+    if (!confirm("Создать тур TOOL_RESULT? / TOOL_RESULT айналымын жасау керек пе?")) return;
+    addTurn("TOOL_RESULT");
+    const after = Array.from(document.querySelectorAll("#turnsContainer .turn"));
+    next = after[idx + 1];
+  }
+  if (next) {
+    next.querySelector('[name$="_content_kk_json"]').value = mockHidden;
+    rerenderResultFromTurnAbove(next);
+  }
+}
+
+function addTurn(forceRole) {
+  const container = document.getElementById("turnsContainer");
+  const turns = container.querySelectorAll(".turn");
+  let nextRole = forceRole || "USER";
+  if (!forceRole && turns.length > 0) {
+    const last = turns[turns.length - 1].dataset.role;
+    if (last === "USER") nextRole = "ASSISTANT";
+    else if (last === "ASSISTANT") nextRole = "USER";
+    else if (last === "TOOL_RESULT") nextRole = "ASSISTANT";
+  }
+  const i = turns.length;
+  const html = `
+    <div class="turn" data-role="${nextRole}">
+      <div class="turn-header">
+        <strong>${I18N.turn_label} <span class="turn-num"></span></strong>
+        <div>
+          <select name="turn_${i}_role" class="role-select" onchange="onRoleChange(this)">
+            <option value="USER" ${nextRole==='USER'?'selected':''}>${I18N.role_user}</option>
+            <option value="ASSISTANT" ${nextRole==='ASSISTANT'?'selected':''}>${I18N.role_assistant}</option>
+            <option value="TOOL_RESULT" ${nextRole==='TOOL_RESULT'?'selected':''}>${I18N.role_tool_result}</option>
+          </select>
+          <button type="button" class="btn small danger" onclick="removeTurn(this)">${I18N.btn_remove_turn}</button>
+        </div>
+      </div>
+      <div class="turn-thinking">
+        <label>${I18N.thinking}</label>
+        <textarea name="turn_${i}_thinking_kk" rows="2"></textarea>
+      </div>
+      <div class="turn-content-text">
+        <label>${I18N.content}</label>
+        <textarea name="turn_${i}_content_kk_text" rows="3"></textarea>
+      </div>
+      <div class="turn-content-result">
+        <label>${I18N.tool_result_label}</label>
+        <div class="tool-result-fields"></div>
+        <details>
+          <summary class="muted" style="cursor:pointer;font-size:13px;margin-top:6px;">${I18N.tool_result_raw}</summary>
+          <textarea name="turn_${i}_content_kk_json" rows="3" class="code"></textarea>
+        </details>
+        <div class="hint">${I18N.tool_result_hint}</div>
+      </div>
+      <div class="turn-tools">
+        <h3 style="margin-top:14px;">${I18N.tool_call}</h3>
+        <label>${I18N.tool_name}</label>
+        <select name="turn_${i}_tool_name" class="tool-select" onchange="onToolChange(this)">
+          <option value="">${I18N.tool_name_none}</option>
+          ${TOOL_OPTIONS}
+        </select>
+        <div class="tool-info muted" style="font-size:12px;margin-top:4px;"></div>
+        <div class="tool-args-fields"></div>
+        <input type="hidden" name="turn_${i}_tool_args" class="tool-args-json" value="">
+        <div class="tool-mock-fields"></div>
+        <input type="hidden" name="turn_${i}_tool_mock_result" class="tool-mock-json" value="">
+        <details style="margin-top:8px;">
+          <summary class="muted" style="cursor:pointer;font-size:13px;">${I18N.tool_show_raw_json}</summary>
+          <label style="font-size:13px;">${I18N.tool_args}</label>
+          <textarea class="code tool-args-raw" rows="2" oninput="onRawArgsEdit(this)"></textarea>
+          <label style="font-size:13px;">${I18N.tool_mock}</label>
+          <textarea class="code tool-mock-raw" rows="2" oninput="onRawMockEdit(this)"></textarea>
+        </details>
+        <button type="button" class="btn small secondary" onclick="copyMockToNextResult(this)" style="margin-top:8px;">${I18N.copy_mock}</button>
+      </div>
+    </div>`;
+  container.insertAdjacentHTML("beforeend", html);
+  renumberTurns();
+  if (nextRole === 'TOOL_RESULT') {
+    const all = document.querySelectorAll('#turnsContainer .turn');
+    rerenderResultFromTurnAbove(all[all.length - 1]);
+  }
+}
+
+function removeTurn(btn) {
+  if (document.querySelectorAll("#turnsContainer .turn").length <= 1) {
+    alert(I18N.last_turn_alert);
+    return;
+  }
+  if (!confirm(I18N.confirm_remove)) return;
+  btn.closest(".turn").remove();
+  renumberTurns();
+}
+
+function setNow() {
+  const now = new Date();
+  const offsetMin = 6 * 60;
+  const local = new Date(now.getTime() + (offsetMin - now.getTimezoneOffset()) * 60000);
+  const pad = n => String(n).padStart(2, "0");
+  const s = `${local.getFullYear()}-${pad(local.getMonth()+1)}-${pad(local.getDate())}` +
+            `T${pad(local.getHours())}:${pad(local.getMinutes())}:${pad(local.getSeconds())}+06:00`;
+  document.getElementById("completedAtInput").value = s;
+}
+
+function syncArchetypeUI() {
+  const a = document.getElementById("archetypeSelect").value;
+  document.getElementById("prefBlock").style.display = (a === "preference") ? "" : "none";
+  document.getElementById("anchorRequiredMark").style.display = (a === "cultural_reasoning") ? "" : "none";
+  document.getElementById("bucRequiredMark").style.display = (a === "business_scenario") ? "" : "none";
+}
+
+// Перед сабмитом — синхронизируем все JSON-поля на всякий случай
+function syncAllJsonBeforeSubmit() {
+  document.querySelectorAll('#turnsContainer .turn').forEach(turn => {
+    if (turn.querySelector('.tool-args-fields') && turn.querySelector('.tool-args-fields').children.length > 0) {
+      syncArgsToJson(turn);
+      syncMockToJson(turn);
+    }
+    if (turn.dataset.role === 'TOOL_RESULT' && turn.querySelector('.tool-result-fields').children.length > 0) {
+      syncToolResultToJson(turn);
+    }
+  });
+}
+
+document.getElementById("archetypeSelect").addEventListener("change", syncArchetypeUI);
+
+const TOOL_OPTIONS = `{% for tool in tool_library %}<option value="{{ tool }}">{{ tool }}</option>{% endfor %}`;
+
+// Инициализация на загрузке: для уже выбранных инструментов рендерим поля
+document.querySelectorAll("#turnsContainer .turn .tool-select").forEach(sel => {
+  if (sel.value) onToolChange(sel);
+});
+// Для TOOL_RESULT-туров пытаемся отрисовать поля из тура выше
+document.querySelectorAll('#turnsContainer .turn').forEach(turn => {
+  if (turn.dataset.role === 'TOOL_RESULT') {
+    setTimeout(() => rerenderResultFromTurnAbove(turn), 200);
+  }
+});
+
+renumberTurns();
+syncArchetypeUI();
+</script>
+{% endblock %}

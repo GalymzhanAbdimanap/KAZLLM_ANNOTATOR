@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ t('reg.title') }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px;margin:40px auto;">
+  <h1>{{ t('reg.title') }}</h1>
+  <p class="muted">{{ t('reg.intro') }}</p>
+
+  <form method="post">
+    <label for="username">{{ t('reg.username') }}</label>
+    <input id="username" name="username" type="text" value="{{ username|default('') }}" required>
+    <div class="hint">{{ t('reg.username_hint') }}</div>
+
+    <label for="full_name">{{ t('reg.full_name') }}</label>
+    <input id="full_name" name="full_name" type="text" value="{{ full_name|default('') }}" required>
+    <div class="hint">{{ t('reg.full_name_hint') }}</div>
+
+    <label for="password">{{ t('reg.password') }}</label>
+    <input id="password" name="password" type="password" minlength="8" required>
+    <div class="hint">{{ t('reg.password_hint') }}</div>
+
+    <label for="password2">{{ t('reg.password2') }}</label>
+    <input id="password2" name="password2" type="password" minlength="8" required>
+
+    <div style="margin-top:16px;">
+      <button type="submit" class="btn">{{ t('reg.submit') }}</button>
+      <a href="{{ url_for('login') }}" class="btn secondary">{{ t('reg.have_account') }}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
