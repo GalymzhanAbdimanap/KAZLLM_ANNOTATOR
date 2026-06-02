@@ -60,6 +60,8 @@ ARCHETYPES = [
     ("cultural_reasoning","Культурное рассуждение"),
     ("business_scenario", "Бизнес-сценарий с инструментами"),
     ("benchmark",         "Бенчмарк (удерживаемый)"),
+    ("code_switching",    "Переключение кода и регистра (§2.7)"),
+    ("cultural_refusal",  "Культурный отказ и перенаправление (§2.8)"),
 ]
 
 DOMAINS = [
@@ -458,10 +460,10 @@ def validate_unit(form_data: dict, turns: list, preference: dict | None) -> list
             else:
                 # П.12: bad_alternative не должна быть равна good content (тривиальная пара)
                 good_content = (turns[gti - 1].get("content_kk") or "").strip()
-                bad_content = (preference.get("bad_alternative_kk") or "").strip()
+                bad_content = (preference.get("bad_content_kk") or "").strip()
                 if good_content and bad_content and _normalize_text(good_content) == _normalize_text(bad_content):
                     errors.append(tt("v.pref_identical"))
-            if not preference.get("bad_alternative_kk", "").strip():
+            if not preference.get("bad_content_kk", "").strip():
                 errors.append(tt("v.pref_bad_required"))
             br = preference.get("bad_reason", "")
             if br not in {r[0] for r in REJECTION_REASONS}:
@@ -760,7 +762,16 @@ def render_unit_text(unit: dict) -> list[str]:
         pref = json.loads(unit["preference_json"])
         L("=== PREFERENCE ===")
         L(f"Good turn idx: {pref.get('good_turn_idx', '')}")
-        L(f"Bad alternative (Kazakh): {pref.get('bad_alternative_kk', '').rstrip()}")
+        bad_content = pref.get("bad_content_kk", "").rstrip()
+        bad_tool    = pref.get("bad_tool_name", "").strip()
+        L(f"Bad alternative (Kazakh): {bad_content}")
+        if bad_tool:
+            L("Tool call:")
+            L(f"  name: {bad_tool}")
+            if pref.get("bad_tool_args", "").strip():
+                L(f"  args: {pref['bad_tool_args'].strip()}")
+            if pref.get("bad_tool_mock_result", "").strip():
+                L(f"  expected mock_result: {pref['bad_tool_mock_result'].strip()}")
         L(f"Rejection reason: {pref.get('bad_reason', '')}")
         L("")
 
@@ -1092,9 +1103,12 @@ def _save_unit(unit_id):
     preference = None
     if archetype == "preference":
         preference = {
-            "good_turn_idx":      form.get("pref_good_turn_idx", ""),
-            "bad_alternative_kk": form.get("pref_bad_alternative_kk", ""),
-            "bad_reason":         form.get("pref_bad_reason", ""),
+            "good_turn_idx":        form.get("pref_good_turn_idx", ""),
+            "bad_content_kk":       form.get("pref_bad_content_kk", ""),
+            "bad_tool_name":        form.get("pref_bad_tool_name", ""),
+            "bad_tool_args":        form.get("pref_bad_tool_args", ""),
+            "bad_tool_mock_result": form.get("pref_bad_tool_mock_result", ""),
+            "bad_reason":           form.get("pref_bad_reason", ""),
         }
 
     errors = validate_unit(form, turns, preference)
@@ -1291,7 +1305,7 @@ if __name__ == "__main__":
     init_db()
     print("=" * 60)
     print("KazLLM Annotator — локальный сервер")
-    print("Открой в браузере: http://0.0.0.0:5000")
+    print("Открой в браузере: http://127.0.0.1:5000")
     print("Чтобы остановить — Ctrl+C")
     print("=" * 60)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5556, debug=False)
